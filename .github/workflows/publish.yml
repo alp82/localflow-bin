@@ -1,0 +1,43 @@
+name: Publish to AUR
+on:
+  push:
+    branches: [main]
+    paths: [PKGBUILD, .SRCINFO, LICENSE, 'scripts/**', '.ci/**', '.github/workflows/publish.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: aur-publish
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests
+      - run: bash scripts/check.sh
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    environment: aur
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Configure the AUR publishing key
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          test -n "$AUR_SSH_PRIVATE_KEY"
+          install -dm700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          cp .ci/aur-known-hosts ~/.ssh/known_hosts
+          printf 'Host aur.archlinux.org\n  User aur\n  IdentityFile ~/.ssh/aur\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n' > ~/.ssh/config
+      - run: bash scripts/publish.sh
+      - name: Remove publishing key
+        if: always()
+        run: rm -f ~/.ssh/aur

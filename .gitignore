@@ -1,0 +1,7 @@
+/src/
+/pkg/
+/.artifacts/
+/*.tar.zst
+__pycache__/
+/*.AppImage
+/localflow-*-README.md
